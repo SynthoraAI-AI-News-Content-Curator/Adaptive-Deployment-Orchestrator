@@ -2,6 +2,33 @@
 
 Complete reference for the Adaptive Deploy CLI tool.
 
+## Overview
+
+The CLI provides command-line access to all deployment operations, designed for both interactive use and CI/CD automation.
+
+```mermaid
+graph LR
+    subgraph "CLI Commands"
+        Login[login]
+        Canary[canary deploy]
+        BlueGreen[blue-green deploy]
+        Control[start/pause/resume]
+        Status[status]
+        Rollback[rollback]
+    end
+
+    subgraph "API"
+        API[ADO API]
+    end
+
+    Login --> API
+    Canary --> API
+    BlueGreen --> API
+    Control --> API
+    Status --> API
+    Rollback --> API
+```
+
 ## Installation
 
 ```bash
@@ -33,6 +60,30 @@ Create `~/.ado/config.yaml`:
 api_url: http://localhost:8000
 default_environment: staging
 default_namespace: default
+```
+
+## Command Structure
+
+```mermaid
+graph TD
+    CLI[adaptive-deploy]
+    CLI --> Auth[Authentication]
+    CLI --> Deploy[Deployment]
+    CLI --> Control[Control]
+    CLI --> Monitor[Monitoring]
+    
+    Auth --> Login[login]
+    
+    Deploy --> Canary[canary deploy]
+    Deploy --> BlueGreen[blue-green deploy]
+    
+    Control --> Start[start]
+    Control --> Pause[pause]
+    Control --> Resume[resume]
+    Control --> RB[rollback]
+    
+    Monitor --> Status[status]
+    Monitor --> Health[health]
 ```
 
 ## Global Options
