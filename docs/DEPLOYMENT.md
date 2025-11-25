@@ -2,6 +2,46 @@
 
 Complete guide for deploying the Adaptive Deployment Orchestrator in production environments.
 
+## Deployment Architecture Overview
+
+```mermaid
+graph TB
+    subgraph "Internet"
+        Users[Users]
+        CICD[CI/CD Systems]
+    end
+
+    subgraph "Load Balancer"
+        LB[Load Balancer / CDN]
+    end
+
+    subgraph "Application Tier"
+        FE[Frontend<br/>React + Nginx]
+        BE1[Backend API 1]
+        BE2[Backend API 2]
+        BE3[Backend API N]
+    end
+
+    subgraph "Data Tier"
+        DB[(PostgreSQL)]
+        Redis[(Redis Cache)]
+    end
+
+    subgraph "Monitoring"
+        Prom[Prometheus]
+        Grafana[Grafana]
+    end
+
+    Users --> LB
+    CICD --> LB
+    LB --> FE
+    LB --> BE1 & BE2 & BE3
+    BE1 & BE2 & BE3 --> DB
+    BE1 & BE2 & BE3 --> Redis
+    BE1 & BE2 & BE3 --> Prom
+    Prom --> Grafana
+```
+
 ## Prerequisites
 
 - Docker 20.10+ and Docker Compose 2.0+
@@ -34,6 +74,24 @@ docker-compose up -d
 
 # Check service health
 docker-compose ps
+```
+
+### Service Architecture
+
+```mermaid
+graph LR
+    subgraph "Docker Compose Stack"
+        Frontend[Frontend:3000]
+        Backend[Backend:8000]
+        Postgres[(PostgreSQL:5432)]
+        Prometheus[Prometheus:9090]
+        Grafana[Grafana:3001]
+    end
+    
+    Frontend --> Backend
+    Backend --> Postgres
+    Backend --> Prometheus
+    Prometheus --> Grafana
 ```
 
 ### Access the Application

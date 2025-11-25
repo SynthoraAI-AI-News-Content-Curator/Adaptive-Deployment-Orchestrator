@@ -2,6 +2,11 @@
 
 A production-grade, intelligent deployment orchestration platform with real-time control dashboard for Blue-Green and Canary deployments.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![React 18](https://img.shields.io/badge/react-18-blue.svg)](https://reactjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
+
 ## Features
 
 - **Intelligent Deployment Strategies**: Blue-Green and Canary rollouts with automated traffic control
@@ -12,6 +17,23 @@ A production-grade, intelligent deployment orchestration platform with real-time
 - **Enterprise Security**: JWT authentication, RBAC, audit logging
 - **Production Observability**: OpenTelemetry, Prometheus metrics, structured logging
 - **CI/CD Ready**: GitHub Actions and GitLab pipeline examples
+
+## Deployment Strategies
+
+```mermaid
+graph LR
+    subgraph "Canary Deployment"
+        C1[10% Traffic] --> C2[25% Traffic]
+        C2 --> C3[50% Traffic]
+        C3 --> C4[100% Traffic]
+    end
+    
+    subgraph "Blue-Green Deployment"
+        B1[Blue: Active] --> B2[Green: Deploy]
+        B2 --> B3[Switch Traffic]
+        B3 --> B4[Green: Active]
+    end
+```
 
 ## Quick Start
 
@@ -60,20 +82,62 @@ adaptive-deploy --help
 
 See [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed system design.
 
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        Dashboard[React Dashboard]
+        CLI[CLI Tool]
+        External[External Systems]
+    end
+
+    subgraph "API Layer"
+        Gateway[FastAPI Gateway]
+        WS[WebSocket Server]
+    end
+
+    subgraph "Core Layer"
+        Orchestrator[Orchestration Engine]
+        Metrics[Metrics Analyzer]
+        Anomaly[Anomaly Detector]
+    end
+
+    subgraph "Data Layer"
+        DB[(PostgreSQL)]
+        Prom[Prometheus]
+    end
+
+    subgraph "Infrastructure"
+        K8s[Kubernetes]
+        Cloud[Cloud Services]
+    end
+
+    Dashboard --> Gateway
+    Dashboard --> WS
+    CLI --> Gateway
+    External --> Gateway
+
+    Gateway --> Orchestrator
+    WS --> Orchestrator
+    
+    Orchestrator --> Metrics
+    Orchestrator --> DB
+    Metrics --> Anomaly
+    Metrics --> Prom
+    
+    Orchestrator --> K8s
+    Orchestrator --> Cloud
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│  Dashboard  │────▶│  API Gateway │────▶│ Orchestrator│
-│  (React)    │◀────│  (FastAPI)   │◀────│   Engine    │
-└─────────────┘     └──────────────┘     └─────────────┘
-      │                    │                     │
-      │ WebSocket          │ REST                │
-      │                    │                     │
-      ▼                    ▼                     ▼
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Real-time │     │  PostgreSQL  │     │  Prometheus │
-│   Updates   │     │   Database   │     │   Metrics   │
-└─────────────┘     └──────────────┘     └─────────────┘
-```
+
+### Key Components
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| API Gateway | FastAPI | REST API & WebSocket server |
+| Dashboard | React 18 + TypeScript | Real-time deployment UI |
+| CLI | Python + Click | Command-line operations |
+| Database | PostgreSQL | Deployment state & audit logs |
+| Metrics | Prometheus | Time-series monitoring |
+| Container | Docker + Kubernetes | Container orchestration |
 
 ## Documentation
 
@@ -158,6 +222,59 @@ adaptive-deploy resume --deployment news-api-canary
 adaptive-deploy rollback --deployment news-api-canary
 ```
 
+## Deployment Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: Create
+    Pending --> InProgress: Start
+    InProgress --> Paused: Pause
+    Paused --> InProgress: Resume
+    InProgress --> Completed: Success
+    InProgress --> RolledBack: Rollback
+    InProgress --> Failed: Error
+    Paused --> RolledBack: Rollback
+    Completed --> [*]
+    RolledBack --> [*]
+    Failed --> [*]
+```
+
+## Production Readiness
+
+### Security Features
+- ✅ JWT authentication with configurable expiration
+- ✅ Role-Based Access Control (RBAC)
+- ✅ Audit logging for all operations
+- ✅ Input validation and sanitization
+- ✅ CORS configuration
+- ✅ Rate limiting
+
+### Observability
+- ✅ Prometheus metrics endpoint
+- ✅ Structured JSON logging
+- ✅ Health and readiness probes
+- ✅ OpenTelemetry support
+- ✅ Real-time event streaming
+
+### Reliability
+- ✅ Database connection pooling
+- ✅ Automatic retry with backoff
+- ✅ Graceful error handling
+- ✅ Idempotent operations
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
 ## License
 
 MIT License - See [LICENSE](./LICENSE) for details
+
+---
+
+**Built for production. Ready to deploy. Built for scale.**

@@ -390,6 +390,62 @@ OpenTelemetry integration for:
 - Audit trail for reconstruction
 - Rollback capabilities
 
+## Data Flow Diagrams
+
+### Request Processing Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Gateway as API Gateway
+    participant Auth as Auth Middleware
+    participant Handler as Request Handler
+    participant Service as Business Service
+    participant DB as Database
+
+    Client->>Gateway: HTTP Request
+    Gateway->>Auth: Validate JWT
+    Auth->>Auth: Decode & Verify Token
+    Auth->>Gateway: User Context
+    Gateway->>Handler: Route Request
+    Handler->>Handler: Validate Input
+    Handler->>Service: Business Logic
+    Service->>DB: Query/Update
+    DB-->>Service: Result
+    Service-->>Handler: Response Data
+    Handler-->>Gateway: JSON Response
+    Gateway-->>Client: HTTP Response
+```
+
+### Metrics Collection Flow
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Exporter as Metrics Exporter
+    participant Prom as Prometheus
+    participant Analyzer as Metrics Analyzer
+    participant Engine as Orchestrator
+
+    App->>Exporter: Record Metric
+    Exporter->>Prom: Expose /metrics
+    Prom->>Prom: Scrape & Store
+    
+    Engine->>Analyzer: Check Health
+    Analyzer->>Prom: Query Metrics
+    Prom-->>Analyzer: Time Series Data
+    Analyzer->>Analyzer: Analyze Trends
+    Analyzer-->>Engine: Health Status
+    
+    alt Healthy
+        Engine->>Engine: Proceed
+    else Anomaly Detected
+        Engine->>Engine: Pause & Alert
+    else Threshold Exceeded
+        Engine->>Engine: Trigger Rollback
+    end
+```
+
 ## Technology Stack Summary
 
 | Layer | Technology | Purpose |
@@ -403,3 +459,62 @@ OpenTelemetry integration for:
 | Monitoring | Grafana | Visualization |
 | Language | Python 3.11 | Backend logic |
 | Language | TypeScript | Frontend logic |
+
+## Production Deployment Patterns
+
+### Single Region Deployment
+
+```mermaid
+graph TB
+    subgraph "Region A"
+        LB[Load Balancer]
+        
+        subgraph "App Tier"
+            API1[API Server 1]
+            API2[API Server 2]
+        end
+        
+        subgraph "Data Tier"
+            DB[(Primary DB)]
+            Cache[(Redis)]
+        end
+    end
+    
+    LB --> API1 & API2
+    API1 & API2 --> DB & Cache
+```
+
+### Multi-Region Deployment
+
+```mermaid
+graph TB
+    subgraph "Global"
+        GLB[Global Load Balancer]
+    end
+
+    subgraph "Region A"
+        LBA[Regional LB]
+        APIA[API Servers]
+        DBA[(Primary DB)]
+    end
+
+    subgraph "Region B"
+        LBB[Regional LB]
+        APIB[API Servers]
+        DBB[(Replica DB)]
+    end
+
+    GLB --> LBA & LBB
+    LBA --> APIA
+    LBB --> APIB
+    APIA --> DBA
+    APIB --> DBB
+    DBA -.->|Replication| DBB
+```
+
+## See Also
+
+- [API Reference](./API.md)
+- [Deployment Guide](./DEPLOYMENT.md)
+- [Security Best Practices](./SECURITY.md)
+- [CLI Reference](./CLI.md)
