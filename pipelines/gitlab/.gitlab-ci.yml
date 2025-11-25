@@ -1,0 +1,187 @@
+# GitLab CI/CD Pipeline for Adaptive Deployment Orchestrator
+
+stages:
+  - build
+  - test
+  - deploy
+  - monitor
+
+variables:
+  ADO_API_URL: "${ADO_API_URL}"
+  SERVICE_NAME: "news-api"
+  DOCKER_DRIVER: overlay2
+
+# Build stage
+build:backend:
+  stage: build
+  image: python:3.11-slim
+  script:
+    - cd backend
+    - pip install -r requirements.txt
+    - python -m compileall app
+  artifacts:
+    paths:
+      - backend/
+    expire_in: 1 hour
+
+build:frontend:
+  stage: build
+  image: node:18-alpine
+  script:
+    - cd frontend
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/dist/
+    expire_in: 1 hour
+
+# Test stage
+test:backend:
+  stage: test
+  image: python:3.11-slim
+  dependencies:
+    - build:backend
+  script:
+    - cd backend
+    - pip install -r requirements.txt pytest pytest-asyncio pytest-cov
+    - pytest tests/ --cov=app --cov-report=xml --cov-report=term
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: backend/coverage.xml
+
+test:frontend:
+  stage: test
+  image: node:18-alpine
+  dependencies:
+    - build:frontend
+  script:
+    - cd frontend
+    - npm ci
+    - npm run type-check
+    - npm run lint
+
+# Deploy to Staging
+deploy:staging:
+  stage: deploy
+  image: python:3.11-slim
+  only:
+    - develop
+  environment:
+    name: staging
+    url: https://staging.example.com
+  before_script:
+    - cd cli && pip install -e .
+  script:
+    - |
+      # Login
+      adaptive-deploy login \
+        --username ${ADO_USERNAME} \
+        --password ${ADO_PASSWORD}
+
+      # Create canary deployment
+      DEPLOYMENT_OUTPUT=$(adaptive-deploy canary deploy \
+        --service ${SERVICE_NAME} \
+        --version ${CI_COMMIT_SHORT_SHA} \
+        --environment staging \
+        --steps 25,50,100 \
+        --metric error_rate:0.05 \
+        --auto-start)
+
+      # Extract deployment ID
+      DEPLOYMENT_ID=$(echo "$DEPLOYMENT_OUTPUT" | grep -oP 'Deployment created: \K[^ ]+')
+      echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" > deployment.env
+
+      echo "Deployment ID: $DEPLOYMENT_ID"
+  artifacts:
+    reports:
+      dotenv: deployment.env
+
+# Deploy to Production with Blue-Green
+deploy:production:
+  stage: deploy
+  image: python:3.11-slim
+  only:
+    - main
+  environment:
+    name: production
+    url: https://example.com
+  before_script:
+    - cd cli && pip install -e .
+  script:
+    - |
+      # Login
+      adaptive-deploy login \
+        --username ${ADO_USERNAME} \
+        --password ${ADO_PASSWORD}
+
+      # Create blue-green deployment
+      DEPLOYMENT_OUTPUT=$(adaptive-deploy blue-green deploy \
+        --service ${SERVICE_NAME} \
+        --version ${CI_COMMIT_SHORT_SHA} \
+        --environment production)
+
+      DEPLOYMENT_ID=$(echo "$DEPLOYMENT_OUTPUT" | grep -oP 'Deployment created: \K[^ ]+')
+      echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" > deployment.env
+
+      # Start deployment
+      adaptive-deploy start --deployment $DEPLOYMENT_ID
+
+      echo "Deployment ID: $DEPLOYMENT_ID"
+  artifacts:
+    reports:
+      dotenv: deployment.env
+  when: manual  # Require manual approval for production
+
+# Monitor deployment
+monitor:deployment:
+  stage: monitor
+  image: python:3.11-slim
+  dependencies:
+    - deploy:staging
+  script:
+    - cd cli && pip install -e .
+    - |
+      echo "Monitoring deployment: ${DEPLOYMENT_ID}"
+
+      for i in {1..40}; do
+        STATUS=$(adaptive-deploy status --deployment ${DEPLOYMENT_ID} | grep -oP 'Status: \K[^ ]+')
+        echo "Current status: $STATUS (attempt $i/40)"
+
+        if [ "$STATUS" == "completed" ]; then
+          echo "✓ Deployment completed successfully"
+          exit 0
+        elif [ "$STATUS" == "failed" ] || [ "$STATUS" == "rolled_back" ]; then
+          echo "✗ Deployment failed or rolled back"
+          exit 1
+        fi
+
+        sleep 30
+      done
+
+      echo "✗ Deployment monitoring timeout"
+      exit 1
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+
+# Rollback job (manual)
+rollback:
+  stage: deploy
+  image: python:3.11-slim
+  when: manual
+  script:
+    - cd cli && pip install -e .
+    - |
+      adaptive-deploy login \
+        --username ${ADO_USERNAME} \
+        --password ${ADO_PASSWORD}
+
+      adaptive-deploy rollback \
+        --deployment ${DEPLOYMENT_ID} \
+        --reason "Manual rollback triggered from GitLab CI"

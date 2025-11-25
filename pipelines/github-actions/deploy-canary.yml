@@ -1,0 +1,129 @@
+name: Deploy with Canary Strategy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      service_name:
+        description: 'Service name to deploy'
+        required: true
+        default: 'news-api'
+      version:
+        description: 'Version to deploy'
+        required: true
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+env:
+  ADO_API_URL: ${{ secrets.ADO_API_URL }}
+  ADO_TOKEN: ${{ secrets.ADO_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Adaptive Deploy CLI
+        run: |
+          cd cli
+          pip install -e .
+
+      - name: Login to ADO
+        run: |
+          adaptive-deploy login \
+            --username ${{ secrets.ADO_USERNAME }} \
+            --password ${{ secrets.ADO_PASSWORD }}
+
+      - name: Create Canary Deployment
+        id: create_deployment
+        run: |
+          DEPLOYMENT_OUTPUT=$(adaptive-deploy canary deploy \
+            --service ${{ github.event.inputs.service_name || 'news-api' }} \
+            --version ${{ github.event.inputs.version || github.sha }} \
+            --environment ${{ github.event.inputs.environment || 'staging' }} \
+            --steps 10,25,50,100 \
+            --metric error_rate:0.05 \
+            --metric latency_p99:1000 \
+            --auto-start)
+
+          echo "deployment_output=$DEPLOYMENT_OUTPUT" >> $GITHUB_OUTPUT
+
+      - name: Monitor Deployment
+        run: |
+          # Extract deployment ID from output
+          DEPLOYMENT_ID=$(echo "${{ steps.create_deployment.outputs.deployment_output }}" | grep -oP 'deployment_id: \K[^ ]+')
+
+          echo "Monitoring deployment: $DEPLOYMENT_ID"
+
+          # Poll deployment status
+          for i in {1..60}; do
+            STATUS=$(adaptive-deploy status --deployment $DEPLOYMENT_ID | grep -oP 'Status: \K[^ ]+')
+            echo "Current status: $STATUS"
+
+            if [ "$STATUS" == "completed" ]; then
+              echo "✓ Deployment completed successfully"
+              exit 0
+            elif [ "$STATUS" == "failed" ] || [ "$STATUS" == "rolled_back" ]; then
+              echo "✗ Deployment failed or rolled back"
+              exit 1
+            fi
+
+            sleep 30
+          done
+
+          echo "✗ Deployment timeout"
+          exit 1
+
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          DEPLOYMENT_ID=$(echo "${{ steps.create_deployment.outputs.deployment_output }}" | grep -oP 'deployment_id: \K[^ ]+')
+          adaptive-deploy rollback --deployment $DEPLOYMENT_ID --reason "Automated rollback: CI/CD failure"
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          payload: |
+            {
+              "text": "Deployment ${{ job.status }}: ${{ github.event.inputs.service_name || 'news-api' }} @ ${{ github.event.inputs.version || github.sha }}",
+              "attachments": [{
+                "color": "${{ job.status == 'success' && 'good' || 'danger' }}",
+                "fields": [
+                  {
+                    "title": "Service",
+                    "value": "${{ github.event.inputs.service_name || 'news-api' }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Environment",
+                    "value": "${{ github.event.inputs.environment || 'staging' }}",
+                    "short": true
+                  },
+                  {
+                    "title": "Status",
+                    "value": "${{ job.status }}",
+                    "short": true
+                  }
+                ]
+              }]
+            }
