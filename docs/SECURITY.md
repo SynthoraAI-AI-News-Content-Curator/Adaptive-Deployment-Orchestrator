@@ -94,8 +94,8 @@ sequenceDiagram
 ### Production Configuration
 
 ```bash
-# Generate a secure secret key
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+# Generate a secure secret key (256 bits of entropy)
+python3 -c "import secrets; print(secrets.token_hex(32))"
 
 # Set environment variable
 export SECRET_KEY="your-64-character-secure-random-string-here-change-this"
@@ -218,8 +218,8 @@ curl -X POST http://localhost:8000/api/v1/auth/change-password \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "current_password": "admin123",
-    "new_password": "your-secure-new-password"
+    "current_password": "<your-current-password>",
+    "new_password": "<your-secure-new-password>"
   }'
 ```
 

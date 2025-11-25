@@ -70,9 +70,9 @@ sequenceDiagram
 
 | Username | Password | Role |
 |----------|----------|------|
-| admin | admin123 | Admin |
+| admin | *(set on first login)* | Admin |
 
-> ⚠️ **Important:** Change the default password immediately in production!
+> ⚠️ **Important:** Change the default password immediately after first login!
 
 ---
 
